@@ -1,5 +1,5 @@
 /* Carnet de Suivi : hors ligne + photos servies depuis le téléphone */
-var CACHE = "carnet-v2.37";
+var CACHE = "carnet-v2.38";
 self.addEventListener("install", function(e){ e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(["./","index.html","manifest.webmanifest","icone-192.png","icone-512.png"]); })); self.skipWaiting(); });
 self.addEventListener("activate", function(e){ e.waitUntil(caches.keys().then(function(ks){ return Promise.all(ks.filter(function(k){ return k!==CACHE; }).map(function(k){ return caches.delete(k); })); }).then(function(){ return self.clients.claim(); })); });
 function photo(id){ return new Promise(function(ok){

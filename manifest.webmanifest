@@ -1,5 +1,5 @@
 {
-  "name": "Carnet de Suivi",
+  "name": "© 2026 MLCORP",
   "short_name": "Carnet",
   "description": "Carnet de Suivi Muslim Life",
   "lang": "fr",
@@ -10,8 +10,23 @@
   "background_color": "#0B0B0A",
   "theme_color": "#0B0B0A",
   "icons": [
-    {"src": "icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-    {"src": "icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    {
+      "src": "icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icone-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
