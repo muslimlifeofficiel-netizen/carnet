@@ -24,12 +24,25 @@
 #ecranDemarrage .lueur{--p:0%;background:radial-gradient(circle at 50% 45%,transparent calc(var(--p) - 18%),rgba(255,236,170,.45) calc(var(--p) - 9%),rgba(255,250,225,.85) calc(var(--p) - 4%),transparent var(--p));mix-blend-mode:screen;filter:blur(1.5px);animation:mkMonte .5s cubic-bezier(.4,0,.2,1) .4s forwards,mkLueurOff .2s ease-out .85s forwards}
 </style><div class="mk"><span class="blanc"></span><div class="orw"><span class="or"></span></div><span class="lueur"></span><span class="prisme"></span><span class="final"></span></div>
 <div class="sl">LE <i>F</i>ITNESS SANS <i>F</i>ITNAH</div></div>
+<div id="installer" style="display:none;position:fixed;inset:0;background:#0B0B0A;color:#EDEBE5;font:15px/1.5 -apple-system,system-ui,sans-serif;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center">
+<img src="apple-touch-icon.png" alt="" style="width:96px;height:96px;border-radius:22px">
+<p style="margin:0;font-weight:700;font-size:18px">Carnet de Suivi</p>
+<p style="margin:0;color:#A7A49C;max-width:300px">Pour l'installer : bouton Partager, puis « Sur l'écran d'accueil ».<br>Sur Android : menu ⋮, puis « Installer l'application ».</p>
+<a href="https://claude.ai/artifact/7VWvfR24SBATpdzrzcQwdo" style="display:inline-flex;align-items:center;min-height:50px;padding:0 26px;border-radius:12px;background:#D7D49F;color:#1C1B0E;font-weight:700;text-decoration:none">Ouvrir mon Carnet</a></div>
 <div id="secours" style="display:none;position:fixed;inset:0;background:#0B0B0A;color:#EDEBE5;font:15px/1.5 -apple-system,system-ui,sans-serif;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center">
 <p style="margin:0;color:#A7A49C;max-width:300px">Le Carnet ne s'est pas ouvert. Vérifie ta connexion.</p>
 <a href="https://claude.ai/artifact/7VWvfR24SBATpdzrzcQwdo" style="display:inline-flex;align-items:center;min-height:50px;padding:0 26px;border-radius:12px;background:#D7D49F;color:#1C1B0E;font-weight:700;text-decoration:none">Ouvrir mon Carnet</a>
 <a href="telephone.html" style="color:#6E6B64;font-size:12px">Version téléphone (sans IA, données sur ce téléphone)</a></div>
 <script>(function(){
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});
+  var app = (window.navigator.standalone === true) || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  if (!app){
+    // Ouvert dans le navigateur : pas de redirection, pour pouvoir ajouter l'app avec son icône.
+    window.addEventListener("load", function(){ setTimeout(function(){
+      var e=document.getElementById("ecranDemarrage"); if(e) e.remove();
+      var s=document.getElementById("installer"); if(s) s.style.display="flex"; }, 1750); });
+    return;
+  }
   var t0=Date.now(), URL="https://claude.ai/artifact/7VWvfR24SBATpdzrzcQwdo";
   function part(){ var r=Math.max(0,1750-(Date.now()-t0)); setTimeout(function(){ location.replace(URL); }, r); }
   if (document.readyState==="complete") part(); else window.addEventListener("load", part);
