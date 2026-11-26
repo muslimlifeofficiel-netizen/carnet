@@ -85,6 +85,14 @@ class MainActivity : ComponentActivity() {
                         "cœur ${r[HeartRateRecord.BPM_MIN] ?: "-"}/${r[HeartRateRecord.BPM_AVG] ?: "-"}/${r[HeartRateRecord.BPM_MAX] ?: "-"} (min/moy/max)")
                 }
                 val plage = TimeRangeFilter.between(debut.atZone(ZoneId.systemDefault()).toInstant(), fin.atZone(ZoneId.systemDefault()).toInstant())
+                ecris("\n— AUJOURD'HUI, D'OÙ VIENNENT LES DONNÉES —")
+                val auj = TimeRangeFilter.between(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant(), Instant.now().plusSeconds(60))
+                val pas = client.readRecords(ReadRecordsRequest(StepsRecord::class, auj)).records
+                ecris("Pas : ${pas.sumOf { it.count }} en ${pas.size} relevé(s), source : ${pas.map { it.metadata.dataOrigin.packageName }.distinct().joinToString().ifEmpty { "aucune" }}")
+                val dist = client.readRecords(ReadRecordsRequest(DistanceRecord::class, auj)).records
+                ecris("Distance : ${"%.2f".format(dist.sumOf { it.distance.inKilometers })} km, source : ${dist.map { it.metadata.dataOrigin.packageName }.distinct().joinToString().ifEmpty { "aucune" }}")
+                val fc = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, auj)).records.flatMap { r -> r.samples.map { it to r.metadata.dataOrigin.packageName } }
+                fc.lastOrNull()?.let { (e, src) -> ecris("Dernier cœur : ${e.beatsPerMinute} bpm à ${heure.format(e.time)} (${fc.size} mesures), source : $src") } ?: ecris("Cœur : aucune mesure aujourd'hui")
                 ecris("\n— SOMMEIL —")
                 val noms = mapOf(SleepSessionRecord.STAGE_TYPE_AWAKE to "éveil", SleepSessionRecord.STAGE_TYPE_LIGHT to "léger",
                     SleepSessionRecord.STAGE_TYPE_DEEP to "profond", SleepSessionRecord.STAGE_TYPE_REM to "paradoxal",
