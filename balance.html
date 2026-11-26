@@ -29,6 +29,15 @@
 <p class="sous">Page de test du Carnet de Suivi. Elle lit la balance en Bluetooth, sans l'app de la marque. Rien n'est enregistré, rien n'est envoyé.</p>
 
 <div class="carte">
+  <b>Ton profil</b> <span style="color:var(--gris);font-size:13px">(pour calculer la composition, gardé sur ce téléphone seulement)</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+    <select id="pSexe"><option value="h">Homme</option><option value="f">Femme</option></select>
+    <input id="pAge" type="number" inputmode="numeric" placeholder="Âge">
+    <input id="pTaille" type="number" inputmode="numeric" placeholder="Taille (cm)">
+  </div>
+</div>
+
+<div class="carte">
   <ol class="etapes">
     <li>Ouvre cette page dans <b>Chrome</b> (Android, ordinateur Windows ou Mac). Pas sur iPhone.</li>
     <li>Active le Bluetooth. Ferme l'app Fitdays (et, sur Android, « oublie » la balance dans les réglages Bluetooth si elle y est appairée).</li>
@@ -45,15 +54,6 @@
   <button id="tous" class="second">Ma balance n'apparaît pas : voir tous les appareils</button>
   <button id="annonces" class="second">Écouter sans se connecter (mode diffusion)</button>
   <button id="copier" class="second">Copier le journal</button>
-</div>
-
-<div class="carte">
-  <b>Ton profil</b> <span style="color:var(--gris);font-size:13px">(pour calculer la composition, gardé sur ce téléphone seulement)</span>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
-    <select id="pSexe"><option value="h">Homme</option><option value="f">Femme</option></select>
-    <input id="pAge" type="number" inputmode="numeric" placeholder="Âge">
-    <input id="pTaille" type="number" inputmode="numeric" placeholder="Taille (cm)">
-  </div>
 </div>
 
 <div class="carte" id="compo" hidden>
@@ -147,13 +147,16 @@
   function envoie(f, quoi){
     if (!ecr) return;
     file = file.then(function(){
-      var p = ecr.properties.writeWithoutResponse && ecr.writeValueWithoutResponse ? ecr.writeValueWithoutResponse(f) : ecr.writeValue(f);
-      return p.then(function(){ log("  envoyé " + quoi + "  " + hex(new DataView(f.buffer)), "ok"); }, function(e){ log("  envoi " + quoi + " impossible : " + e.message, "ko"); });
+      function ecrire(){ return ecr.properties.writeWithoutResponse && ecr.writeValueWithoutResponse ? ecr.writeValueWithoutResponse(f) : ecr.writeValue(f); }
+      var ok = function(){ log("  envoyé " + quoi + "  " + hex(new DataView(f.buffer)), "ok"); };
+      // Téléphone parfois occupé à lire autre chose : on réessaie jusqu'à 3 fois.
+      return ecrire().then(ok, function(){ return new Promise(function(r){ setTimeout(r, 400); }).then(ecrire).then(ok, function(){
+        return new Promise(function(r){ setTimeout(r, 800); }).then(ecrire).then(ok, function(e){ log("  envoi " + quoi + " impossible : " + e.message, "ko"); }); }); });
     });
   }
   function accuse(seq){ envoie(fab(0xb0, [seq, 0x00]), "B0 (accusé)"); }
   function envoieProfil(){
-    var p = profil(); if (!p){ log("  Profil vide : remplis sexe, âge et taille en haut de la page, puis reconnecte-toi.", "ko"); return; }
+    var p = profil(); if (!p){ log("  Profil vide : remplis sexe, âge et taille tout en haut de la page, puis reconnecte-toi.", "ko"); return; }
     var t = Math.floor(Date.now() / 1000), off = -new Date().getTimezoneOffset(), o = off < 0 ? (0x8000 | -off) : off, w = 6000;
     envoie(fab(0xba, [t>>>24 & 255, t>>>16 & 255, t>>>8 & 255, t & 255, o >> 8, o & 255, 0, 0, 0, 0, p.cm & 255, w >> 8, w & 255, ((p.f ? 0 : 1) << 7) | (p.age & 0x7f), 0x2f]),
       "BA (profil : " + (p.f ? "femme" : "homme") + ", " + p.age + " ans, " + p.cm + " cm)");
@@ -223,7 +226,8 @@
                 }
                 if (!lf && dernierKg && dv.byteLength >= 6 && dv.getUint8(2) !== 0){
                   var ci = chercheImp(dv).filter(function(x){ return x.o >= 3; });
-                  if (ci.length) log("    (2e partie du résultat, valeurs brutes : " + ci.map(function(x){ return x.v + " à l'octet " + x.o + " " + x.f; }).join(" · ") + ")");
+                  if (dv.getUint8(2) === 1 && dv.getUint8(1) === 0x12) log("    VALEUR À IDENTIFIER (fin du résultat) : " + ((dv.getUint8(3) << 8) | dv.getUint8(4)) + "  (impédance en ohms, ou masse grasse ×10 ?)", "ok");
+                  else if (ci.length) log("    (2e partie du résultat, valeurs brutes : " + ci.map(function(x){ return x.v + " à l'octet " + x.o + " " + x.f; }).join(" · ") + ")");
                 }
                 if (lf){ P.textContent = lf.kg.toFixed(2).replace(".", ",") + " kg"; E.innerHTML = '<span class="ok">' + lf.etat + '</span>'; log("    → " + lf.etat + " : " + lf.kg.toFixed(2) + " kg", "ok"); }
               });
