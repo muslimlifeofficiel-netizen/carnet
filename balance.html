@@ -30,7 +30,7 @@
   <ol class="etapes">
     <li>Ouvre cette page dans <b>Chrome</b> (Android, ordinateur Windows ou Mac). Pas sur iPhone.</li>
     <li>Active le Bluetooth. Ferme l'app Fitdays (et, sur Android, « oublie » la balance dans les réglages Bluetooth si elle y est appairée).</li>
-    <li>Monte sur la balance pour la réveiller, puis appuie sur <b>Chercher la balance</b> et choisis-la dans la liste.</li>
+    <li>Monte sur la balance pour la réveiller, puis appuie sur <b>Chercher la balance</b> : seules les balances apparaissent. Choisis la tienne.</li>
     <li>Une fois connecté, <b>remonte sur la balance pieds nus</b> et attends la fin de la mesure.</li>
     <li>Appuie sur <b>Copier le journal</b> et colle-le dans la conversation.</li>
   </ol>
@@ -40,6 +40,7 @@
   <div id="poids">—</div>
   <div id="etat">Pas encore connecté</div>
   <button id="chercher">Chercher la balance</button>
+  <button id="tous" class="second">Ma balance n'apparaît pas : voir tous les appareils</button>
   <button id="annonces" class="second">Écouter sans se connecter (mode diffusion)</button>
   <button id="copier" class="second">Copier le journal</button>
 </div>
@@ -94,10 +95,18 @@
   var SERVICES = [0xffb0, 0xfff0, 0xffe0, 0xffa0, 0xfee7, 0xffd0, 0xffc0, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801,
                   "0000fff0-0000-1000-8000-00805f9b34fb", "0000ffb0-0000-1000-8000-00805f9b34fb"];
 
+  // Balances reconnues : services propres aux balances et débuts de noms connus
+  var FILTRES = [{services:[0xffb0]}, {services:[0x181d]}, {services:[0x181b]}, {services:[0x7802]}].concat(
+    ["HPS","QN","LEFU","icomon","Swan","YG","MIBFS","MI_SCALE","MI SCALE","Body","BF","eufy","T91","YUNMAI","Yunmai","SBF","BS4","ESF","Health Scale","Chipsea","Hutbit","Robi","Renpho","ES-"]
+      .map(function(n){ return {namePrefix:n}; }));
+  var tous = false;
+  document.getElementById("tous").onclick = function(){ tous = true; document.getElementById("chercher").onclick(); tous = false; };
   document.getElementById("chercher").onclick = async function(){
     try{
       E.textContent = "Choisis la balance dans la liste…";
-      var dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:SERVICES});
+      // Sami (26/11) : « l'app reconnaît la balance direct parmi tous les trucs Bluetooth ».
+      // La liste ne montre que les balances connues (services et noms de balances), plus de casques ni de télés.
+      var dev = await navigator.bluetooth.requestDevice(tous ? {acceptAllDevices:true, optionalServices:SERVICES} : {filters:FILTRES, optionalServices:SERVICES});
       log("Appareil choisi : " + (dev.name || "(sans nom)") + "  id " + dev.id);
       dev.addEventListener("gattserverdisconnected", function(){ E.textContent = "Déconnecté"; log("Déconnecté", "ko"); });
       E.textContent = "Connexion…";
