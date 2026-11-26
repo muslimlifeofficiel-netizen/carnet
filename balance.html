@@ -18,6 +18,8 @@
   button:disabled{opacity:.4}
   #poids{font-size:52px;font-weight:800;text-align:center;color:var(--or);margin:4px 0 0;font-variant-numeric:tabular-nums}
   #etat{text-align:center;color:var(--gris);font-size:13px;min-height:20px}
+  select,input{font:inherit;color:var(--texte);background:#111;border:1px solid var(--trait);border-radius:10px;padding:10px;width:100%}
+  .lgn{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--trait)}.lgn b{color:var(--or)}
   #journal{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;max-height:360px;overflow:auto;color:#CFCAC0}
   .ok{color:var(--vert)}.ko{color:var(--rouge)}
 </style>
@@ -43,6 +45,30 @@
   <button id="tous" class="second">Ma balance n'apparaît pas : voir tous les appareils</button>
   <button id="annonces" class="second">Écouter sans se connecter (mode diffusion)</button>
   <button id="copier" class="second">Copier le journal</button>
+</div>
+
+<div class="carte">
+  <b>Ton profil</b> <span style="color:var(--gris);font-size:13px">(pour calculer la composition, gardé sur ce téléphone seulement)</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+    <select id="pSexe"><option value="h">Homme</option><option value="f">Femme</option></select>
+    <input id="pAge" type="number" inputmode="numeric" placeholder="Âge">
+    <input id="pTaille" type="number" inputmode="numeric" placeholder="Taille (cm)">
+  </div>
+</div>
+
+<div class="carte" id="compo" hidden>
+  <b>Composition calculée par le Carnet</b>
+  <div id="compoListe" style="margin-top:8px"></div>
+  <p style="color:var(--gris);font-size:12px;margin:8px 0 0">Formules publiées : masse maigre et eau, Sun et al. 2003 (Am J Clin Nutr) ; muscle squelettique, Janssen et al. 2000 (J Appl Physiol). Valeurs différentes de celles de Fitdays : chaque marque garde ses formules.</p>
+</div>
+
+<div class="carte">
+  <b>Essai sans la balance</b> <span style="color:var(--gris);font-size:13px">(pour voir le calcul tout de suite)</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <input id="sPoids" type="number" inputmode="decimal" placeholder="Poids (kg)">
+    <input id="sImp" type="number" inputmode="numeric" placeholder="Impédance (ohms, ex. 450)">
+  </div>
+  <button id="simuler" class="second">Calculer</button>
 </div>
 
 <div class="carte"><div id="journal"></div></div>
@@ -79,6 +105,42 @@
     if (t === 0xa3){ g = (dv.getUint8(5) << 16) | (dv.getUint8(6) << 8) | dv.getUint8(7);
       return g > 0 ? {kg:g/1000, etat:"Résultat final"} : null; }
     return null;
+  }
+  /* Composition à partir du poids, de l'impédance (ohms), de la taille, de l'âge et du sexe.
+     Masse maigre (FFM) et eau (TBW) : Sun et al., Am J Clin Nutr 2003;77:331, doi 10.1093/ajcn/77.2.331
+       (coefficients relevés dans Chumlea et al., Int J Obes 2008, PMC2877506 ; terme R de la formule femme : 0,016 retenu, 0,16 dans ce tableau = coquille probable, à vérifier sur l'article d'origine).
+     Muscle squelettique : Janssen et al., J Appl Physiol 2000;89:465, doi 10.1152/jappl.2000.89.2.465. */
+  function profil(){ var a = +document.getElementById("pAge").value, t = +document.getElementById("pTaille").value; return (a > 0 && t > 0) ? {f: document.getElementById("pSexe").value === "f", age:a, cm:t} : null; }
+  ["pSexe","pAge","pTaille"].forEach(function(id){ var el = document.getElementById(id); try{ var v = localStorage.getItem("bal_" + id); if (v) el.value = v; }catch(e){} el.addEventListener("change", function(){ try{ localStorage.setItem("bal_" + id, el.value); }catch(e){} }); });
+  function compo(kg, R){
+    var p = profil(); if (!p || !(R > 100 && R < 1500)) return null;
+    var h2r = p.cm * p.cm / R;
+    var ffm = p.f ? -9.529 + 0.168*kg + 0.696*h2r + 0.016*R : -10.678 + 0.262*kg + 0.652*h2r + 0.015*R;
+    var tbw = p.f ? 3.747 + 0.113*kg + 0.45*h2r : 1.203 + 0.176*kg + 0.449*h2r;
+    var smm = h2r*0.401 + (p.f ? 0 : 3.825) - 0.071*p.age + 5.102;
+    return {poids:kg, gras:(kg-ffm)/kg*100, grasKg:kg-ffm, maigre:ffm, eau:tbw/kg*100, muscle:smm, imc:kg/Math.pow(p.cm/100,2)};
+  }
+  function montreCompo(c){
+    if (!c) return;
+    var f = function(v, d){ return v.toFixed(d).replace(".", ","); };
+    document.getElementById("compoListe").innerHTML = [["Poids", f(c.poids,2)+" kg"],["IMC", f(c.imc,1)],["Masse grasse", f(c.gras,1)+" % ("+f(c.grasKg,1)+" kg)"],["Masse maigre", f(c.maigre,1)+" kg"],["Muscle squelettique", f(c.muscle,1)+" kg"],["Eau corporelle", f(c.eau,1)+" %"]]
+      .map(function(x){ return '<div class="lgn"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'; }).join("");
+    document.getElementById("compo").hidden = false;
+  }
+  document.getElementById("simuler").onclick = function(){
+    var kg = +String(document.getElementById("sPoids").value).replace(",", "."), R = +document.getElementById("sImp").value;
+    if (!profil()){ E.innerHTML = '<span class="ko">Remplis ton profil (âge et taille).</span>'; return; }
+    var c = compo(kg, R); if (!c){ E.innerHTML = '<span class="ko">Impédance attendue entre 100 et 1500 ohms.</span>'; return; }
+    montreCompo(c); E.innerHTML = '<span class="ok">Calcul fait (essai, sans balance).</span>';
+  };
+  // Impédance : sa place dans les trames de cette balance n'est pas encore connue (pesée habillée = pas d'impédance).
+  // On cherche, dans les trames de résultat (A3, A7) et les suivantes, un nombre plausible (200 à 1200 ohms) et on l'affiche comme « probable ».
+  var dernierKg = 0;
+  function chercheImp(dv){
+    var r = [];
+    for (var i = 4; i + 1 < dv.byteLength - 1; i++){ var be = dv.getUint16(i, false), le = dv.getUint16(i, true);
+      if (be >= 200 && be <= 1200) r.push({o:i, v:be, f:"BE"}); if (le >= 200 && le <= 1200 && le !== be) r.push({o:i, v:le, f:"LE"}); }
+    return r;
   }
   function trame(nom, dv){
     log(nom + "  [" + dv.byteLength + "]  " + hex(dv));
@@ -128,6 +190,11 @@
                 // A2 = poids en direct [seq][07][00][a2][état][..][poids 3 octets en grammes], état 03 = stabilisé ;
                 // A3 = résultat [seq][len][00][a3][..][poids 3 octets en grammes].
                 var lf = lefu(dv);
+                if (lf && lf.etat === "Résultat final") dernierKg = lf.kg;
+                if (!lf && dernierKg && dv.byteLength >= 6 && dv.getUint8(2) !== 0){
+                  var ci = chercheImp(dv).filter(function(x){ return x.o >= 3; });
+                  if (ci.length){ log("    impédance probable : " + ci.map(function(x){ return x.v + " ohms (octet " + x.o + " " + x.f + ")"; }).join(" · "), "ok"); montreCompo(compo(dernierKg, ci[0].v)); }
+                }
                 if (lf){ P.textContent = lf.kg.toFixed(2).replace(".", ",") + " kg"; E.innerHTML = '<span class="ok">' + lf.etat + '</span>'; log("    → " + lf.etat + " : " + lf.kg.toFixed(2) + " kg", "ok"); }
               });
             })(c);
