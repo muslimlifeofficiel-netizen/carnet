@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Test balance · Carnet de Suivi</title>
+<title>Test balance et montre · Carnet de Suivi</title>
 <style>
   :root{--fond:#0B0B0A;--carte:#1A1A18;--trait:#2E2D2A;--texte:#F2EFE8;--gris:#9A968D;--or:#C99A2E;--vert:#2FB36B;--rouge:#E5484D}
   *{box-sizing:border-box}
@@ -60,6 +60,12 @@
   <b>Composition calculée par le Carnet</b>
   <div id="compoListe" style="margin-top:8px"></div>
   <p style="color:var(--gris);font-size:12px;margin:8px 0 0">Formules publiées : masse maigre et eau, Sun et al. 2003 (Am J Clin Nutr) ; muscle squelettique, Janssen et al. 2000 (J Appl Physiol). Valeurs différentes de celles de Fitdays : chaque marque garde ses formules.</p>
+</div>
+
+<div class="carte">
+  <b>Montre : cardio en direct</b> <span style="color:var(--gris);font-size:13px">(montre en mode « diffusion de la fréquence cardiaque », ou ceinture cardio)</span>
+  <div id="fc" style="font-size:44px;font-weight:800;text-align:center;color:var(--or);margin-top:6px">—</div>
+  <button id="cardio" class="second">Chercher la montre</button>
 </div>
 
 <div class="carte"><div id="journal"></div></div>
@@ -206,6 +212,24 @@
         ev.serviceData.forEach(function(dv, u){ trame("annonce " + (n || ev.device.id.slice(0, 6)) + " svc " + String(u).slice(4, 8), dv); });
       });
     }catch(e){ log("Erreur annonces : " + e.message, "ko"); }
+  };
+
+  /* Cardio en direct : profil Bluetooth standard Heart Rate (service 0x180D, mesure 0x2A37), le même sur toutes les marques.
+     Octet 0 = drapeaux : bit 0 à 1 = FC sur 16 bits, sinon 8 bits ; bit 4 = intervalles RR présents (base de la VFC). */
+  document.getElementById("cardio").onclick = async function(){
+    try{
+      var dev = await navigator.bluetooth.requestDevice({filters:[{services:[0x180d]}]});
+      log("Montre choisie : " + (dev.name || "(sans nom)"));
+      var srv = await dev.gatt.connect(), svc = await srv.getPrimaryService(0x180d), ch = await svc.getCharacteristic(0x2a37);
+      ch.addEventListener("characteristicvaluechanged", function(ev){
+        var dv = ev.target.value, fl = dv.getUint8(0), bpm = (fl & 1) ? dv.getUint16(1, true) : dv.getUint8(1), rr = [];
+        if (fl & 0x10){ var i = (fl & 1) ? 3 : 2; if (fl & 0x08) i += 2; for (; i + 1 < dv.byteLength; i += 2) rr.push(Math.round(dv.getUint16(i, true) / 1024 * 1000)); }
+        document.getElementById("fc").textContent = bpm + " bpm";
+        log("FC " + bpm + " bpm" + (rr.length ? "  intervalles RR : " + rr.join(", ") + " ms" : "") + "  [" + hex(dv) + "]", "ok");
+      });
+      await ch.startNotifications();
+      E.innerHTML = '<span class="ok">Montre connectée : cardio en direct.</span>';
+    }catch(e){ log("Erreur montre : " + e.message, "ko"); E.innerHTML = '<span class="ko">' + e.message + '</span>'; }
   };
 
   document.getElementById("copier").onclick = function(){
