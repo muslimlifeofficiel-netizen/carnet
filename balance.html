@@ -133,6 +133,39 @@
       if (be >= 200 && be <= 1200) r.push({o:i, v:be, f:"BE"}); if (le >= 200 && le <= 1200 && le !== be) r.push({o:i, v:le, f:"LE"}); }
     return r;
   }
+  /* Échange FFB0 (famille ICOMON / Fitdays), écrit par nous à partir de la description publique du protocole
+     (openScale RunstarR6Handler et RelaxmedicHandler, GPL : seul le comportement est repris, aucune ligne de code).
+     Trame de 20 octets : [seq][len][partie][type][charge…][chk], chk = somme(octets 3 à 18) & 0x1F.
+     La balance envoie A1 et attend : B0 (accusé de réception) puis BA (profil : heure, fuseau, taille, sexe, âge).
+     Sans BA, elle ne mesure que le poids (impédance à 0 dans A3). A0, A3, A4 sont acquittés par B0. */
+  var ecr = null, sortie = 0, file = Promise.resolve(), baEnvoyes = 0;
+  function chk(f){ var s = 0; for (var i = 3; i <= 18; i++) s += f[i]; return s & 0x1f; }
+  function fab(type, charge){
+    var f = new Uint8Array(20); f[0] = sortie; sortie = (sortie + 1) & 0xff;
+    f[1] = charge.length + 1; f[2] = 0; f[3] = type; f.set(charge, 4); f[19] = chk(f); return f;
+  }
+  function envoie(f, quoi){
+    if (!ecr) return;
+    file = file.then(function(){
+      var p = ecr.properties.writeWithoutResponse && ecr.writeValueWithoutResponse ? ecr.writeValueWithoutResponse(f) : ecr.writeValue(f);
+      return p.then(function(){ log("  envoyé " + quoi + "  " + hex(new DataView(f.buffer)), "ok"); }, function(e){ log("  envoi " + quoi + " impossible : " + e.message, "ko"); });
+    });
+  }
+  function accuse(seq){ envoie(fab(0xb0, [seq, 0x00]), "B0 (accusé)"); }
+  function envoieProfil(){
+    var p = profil(); if (!p){ log("  Profil vide : remplis sexe, âge et taille en haut de la page, puis reconnecte-toi.", "ko"); return; }
+    var t = Math.floor(Date.now() / 1000), off = -new Date().getTimezoneOffset(), o = off < 0 ? (0x8000 | -off) : off, w = 6000;
+    envoie(fab(0xba, [t>>>24 & 255, t>>>16 & 255, t>>>8 & 255, t & 255, o >> 8, o & 255, 0, 0, 0, 0, p.cm & 255, w >> 8, w & 255, ((p.f ? 0 : 1) << 7) | (p.age & 0x7f), 0x2f]),
+      "BA (profil : " + (p.f ? "femme" : "homme") + ", " + p.age + " ans, " + p.cm + " cm)");
+    baEnvoyes++;
+  }
+  function echange(dv){
+    if (!ecr || dv.byteLength < 20 || dv.getUint8(2) !== 0) return;
+    var t = dv.getUint8(3), seq = dv.getUint8(0);
+    if (t === 0xa1){ accuse(seq); if (baEnvoyes < 3) envoieProfil(); }
+    else if (t === 0xa0){ log("    A0 : réponse de la balance" + (dv.getUint8(4) === 1 ? " (profil accepté, probable)" : ""), "ok"); accuse(seq); }
+    else if (t === 0xa3 || t === 0xa4) accuse(seq);
+  }
   function trame(nom, dv){
     log(nom + "  [" + dv.byteLength + "]  " + hex(dv));
     var c = candidats(dv);
@@ -173,6 +206,7 @@
           var p = c.properties, props = ["read","write","writeWithoutResponse","notify","indicate"].filter(function(k){ return p[k]; }).join(",");
           log("  Caractéristique " + c.uuid + "  (" + props + ")");
           if (p.read){ try{ var v = await c.readValue(); log("    valeur lue : " + hex(v)); }catch(e){} }
+          if (c.uuid.indexOf("0000ffb1") === 0 && (p.write || p.writeWithoutResponse)){ ecr = c; sortie = 0; baEnvoyes = 0; log("    canal d'envoi prêt (accusés et profil)", "ok"); }
           if (p.notify || p.indicate){
             (function(ch){
               ch.addEventListener("characteristicvaluechanged", function(ev){
@@ -180,11 +214,16 @@
                 // Protocole FFB0 « Lefu / Fitdays » (balance HPS-8007, ICOMON FG2001B-A) :
                 // A2 = poids en direct [seq][07][00][a2][état][..][poids 3 octets en grammes], état 03 = stabilisé ;
                 // A3 = résultat [seq][len][00][a3][..][poids 3 octets en grammes].
+                echange(dv);
                 var lf = lefu(dv);
-                if (lf && lf.etat === "Résultat final") dernierKg = lf.kg;
+                if (lf && lf.etat === "Résultat final"){ dernierKg = lf.kg;
+                  var imp = (dv.getUint8(9) << 8) | dv.getUint8(10);
+                  if (imp > 0){ log("    IMPÉDANCE : " + imp + " ohms", "ok"); montreCompo(compo(lf.kg, imp)); }
+                  else log("    impédance : 0 (pas encore mesurée)", "ko");
+                }
                 if (!lf && dernierKg && dv.byteLength >= 6 && dv.getUint8(2) !== 0){
                   var ci = chercheImp(dv).filter(function(x){ return x.o >= 3; });
-                  if (ci.length){ log("    impédance probable : " + ci.map(function(x){ return x.v + " ohms (octet " + x.o + " " + x.f + ")"; }).join(" · "), "ok"); montreCompo(compo(dernierKg, ci[0].v)); }
+                  if (ci.length) log("    (2e partie du résultat, valeurs brutes : " + ci.map(function(x){ return x.v + " à l'octet " + x.o + " " + x.f; }).join(" · ") + ")");
                 }
                 if (lf){ P.textContent = lf.kg.toFixed(2).replace(".", ",") + " kg"; E.innerHTML = '<span class="ok">' + lf.etat + '</span>'; log("    → " + lf.etat + " : " + lf.kg.toFixed(2) + " kg", "ok"); }
               });
@@ -193,7 +232,7 @@
           }
         }
       }
-      E.innerHTML = '<span class="ok">Connecté. Monte sur la balance pieds nus.</span>';
+      E.innerHTML = '<span class="ok">Connecté. Monte sur la balance pieds nus et reste immobile environ 20 secondes après le poids.</span>';
     }catch(e){ E.innerHTML = '<span class="ko">' + e.message + '</span>'; log("Erreur : " + e.message, "ko"); }
   };
 
