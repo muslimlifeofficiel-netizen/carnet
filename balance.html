@@ -114,8 +114,8 @@
     var h2r = p.cm * p.cm / R;
     // Masse maigre : Wu et al. 2015, équation pied-pied 50 kHz, réf. DXA (Nutr J, doi 10.1186/s12937-015-0041-0), homme = 1.
     var ffm = 13.055 + 0.204*kg + 0.394*h2r - 0.136*p.age + (p.f ? 0 : 8.125);
-    // Eau : Aglago et al. 2013, adultes nord-africains (Eur J Clin Nutr, doi 10.1038/ejcn.2013.125).
-    var tbw = 5.68 + 0.267*h2r + (p.f ? 0 : 4.42) + 0.225*kg - 0.052*p.age;
+    // Eau : 73 % de la masse maigre (Wang et al. 1999, AJCN, doi 10.1093/ajcn/69.5.833), pour rester cohérente avec la masse maigre.
+    var tbw = 0.73 * ffm;
     // Muscle squelettique : Janssen et al. 2000. Métabolisme de base : Mifflin-St Jeor 1990.
     var smm = h2r*0.401 + (p.f ? 0 : 3.825) - 0.071*p.age + 5.102;
     var bmr = 10*kg + 6.25*p.cm - 5*p.age + (p.f ? -161 : 5);
