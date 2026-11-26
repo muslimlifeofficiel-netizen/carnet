@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test balance · Carnet de Suivi</title>
+<style>
+  :root{--fond:#0B0B0A;--carte:#1A1A18;--trait:#2E2D2A;--texte:#F2EFE8;--gris:#9A968D;--or:#C99A2E;--vert:#2FB36B;--rouge:#E5484D}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;padding:18px;max-width:640px;margin:auto}
+  h1{font-size:22px;letter-spacing:.04em;text-transform:uppercase;color:var(--or);margin:6px 0 4px}
+  p.sous{color:var(--gris);margin:0 0 16px;font-size:13.5px}
+  .carte{background:var(--carte);border:1px solid var(--trait);border-radius:14px;padding:14px;margin-bottom:12px}
+  .etapes{margin:0;padding-left:20px;color:var(--gris);font-size:13.5px}
+  .etapes b{color:var(--texte)}
+  button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:13px 14px;width:100%;margin-top:8px;cursor:pointer;background:var(--or);color:#111}
+  button.second{background:transparent;color:var(--texte);border:1px solid var(--trait)}
+  button:disabled{opacity:.4}
+  #poids{font-size:52px;font-weight:800;text-align:center;color:var(--or);margin:4px 0 0;font-variant-numeric:tabular-nums}
+  #etat{text-align:center;color:var(--gris);font-size:13px;min-height:20px}
+  #journal{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;max-height:360px;overflow:auto;color:#CFCAC0}
+  .ok{color:var(--vert)}.ko{color:var(--rouge)}
+</style>
+</head>
+<body>
+<h1>Test de la balance</h1>
+<p class="sous">Page de test du Carnet de Suivi. Elle lit la balance en Bluetooth, sans l'app de la marque. Rien n'est enregistré, rien n'est envoyé.</p>
+
+<div class="carte">
+  <ol class="etapes">
+    <li>Ouvre cette page dans <b>Chrome</b> (Android, ordinateur Windows ou Mac). Pas sur iPhone.</li>
+    <li>Active le Bluetooth. Ferme l'app Fitdays (et, sur Android, « oublie » la balance dans les réglages Bluetooth si elle y est appairée).</li>
+    <li>Monte sur la balance pour la réveiller, puis appuie sur <b>Chercher la balance</b> et choisis-la dans la liste.</li>
+    <li>Une fois connecté, <b>remonte sur la balance pieds nus</b> et attends la fin de la mesure.</li>
+    <li>Appuie sur <b>Copier le journal</b> et colle-le dans la conversation.</li>
+  </ol>
+</div>
+
+<div class="carte">
+  <div id="poids">—</div>
+  <div id="etat">Pas encore connecté</div>
+  <button id="chercher">Chercher la balance</button>
+  <button id="annonces" class="second">Écouter sans se connecter (mode diffusion)</button>
+  <button id="copier" class="second">Copier le journal</button>
+</div>
+
+<div class="carte"><div id="journal"></div></div>
+
+<script>
+/* Page de test écrite pour le Carnet (26/11/2026). Elle n'utilise aucun code d'un autre projet :
+   elle se connecte, écoute toutes les caractéristiques qui notifient, et note chaque trame en hexadécimal.
+   Le décodage propre à la Fitdays sera écrit ensuite, à partir de ces trames. */
+(function(){
+  var J = document.getElementById("journal"), E = document.getElementById("etat"), P = document.getElementById("poids");
+  var lignes = [];
+  function log(t, cls){
+    var h = new Date().toTimeString().slice(0,8), l = h + "  " + t; lignes.push(l);
+    var d = document.createElement("div"); d.textContent = l; if (cls) d.className = cls; J.appendChild(d); J.scrollTop = J.scrollHeight;
+  }
+  function hex(dv){ var s = []; for (var i = 0; i < dv.byteLength; i++) s.push(("0" + dv.getUint8(i).toString(16)).slice(-2)); return s.join(" "); }
+  // Repère les poids plausibles dans une trame (16 bits, petit ou grand boutiste, /10 /100 /200)
+  function candidats(dv){
+    var r = [];
+    for (var i = 0; i + 1 < dv.byteLength; i++){
+      [dv.getUint16(i, true), dv.getUint16(i, false)].forEach(function(v, k){
+        [10, 100, 200].forEach(function(div){
+          var kg = v / div; if (kg >= 30 && kg <= 250) r.push({o:i, kg:Math.round(kg*100)/100, f:(k ? "BE" : "LE") + "/" + div});
+        });
+      });
+    }
+    return r;
+  }
+  function trame(nom, dv){
+    log(nom + "  [" + dv.byteLength + "]  " + hex(dv));
+    var c = candidats(dv);
+    if (c.length) log("    poids possibles : " + c.slice(0, 6).map(function(x){ return x.kg + " kg (octet " + x.o + ", " + x.f + ")"; }).join(" · "), "ok");
+  }
+  if (!navigator.bluetooth){
+    E.innerHTML = '<span class="ko">Ce navigateur ne fait pas de Bluetooth. Ouvre la page dans Chrome sur Android ou sur ordinateur.</span>';
+    document.getElementById("chercher").disabled = true; document.getElementById("annonces").disabled = true;
+    log("navigator.bluetooth absent : " + navigator.userAgent, "ko");
+  } else log("Bluetooth web disponible. " + navigator.userAgent);
+
+  // Services courants des balances (Lefu/Fitdays, QN, Chipsea, standard Body Composition et Weight Scale, etc.)
+  var SERVICES = [0xffb0, 0xfff0, 0xffe0, 0xffa0, 0xfee7, 0xffd0, 0xffc0, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801,
+                  "0000fff0-0000-1000-8000-00805f9b34fb", "0000ffb0-0000-1000-8000-00805f9b34fb"];
+
+  document.getElementById("chercher").onclick = async function(){
+    try{
+      E.textContent = "Choisis la balance dans la liste…";
+      var dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:SERVICES});
+      log("Appareil choisi : " + (dev.name || "(sans nom)") + "  id " + dev.id);
+      dev.addEventListener("gattserverdisconnected", function(){ E.textContent = "Déconnecté"; log("Déconnecté", "ko"); });
+      E.textContent = "Connexion…";
+      var srv = await dev.gatt.connect();
+      var services = await srv.getPrimaryServices();
+      log(services.length + " service(s) trouvé(s)");
+      for (var s of services){
+        log("Service " + s.uuid);
+        var chars = []; try{ chars = await s.getCharacteristics(); }catch(e){ log("  lecture impossible : " + e.message, "ko"); }
+        for (var c of chars){
+          var p = c.properties, props = ["read","write","writeWithoutResponse","notify","indicate"].filter(function(k){ return p[k]; }).join(",");
+          log("  Caractéristique " + c.uuid + "  (" + props + ")");
+          if (p.read){ try{ var v = await c.readValue(); log("    valeur lue : " + hex(v)); }catch(e){} }
+          if (p.notify || p.indicate){
+            (function(ch){
+              ch.addEventListener("characteristicvaluechanged", function(ev){
+                var dv = ev.target.value; trame(ch.uuid.slice(4, 8), dv);
+                var c = candidats(dv); if (c.length){ P.textContent = c[0].kg.toFixed(1).replace(".", ",") + " kg"; }
+              });
+            })(c);
+            try{ await c.startNotifications(); log("    écoute activée", "ok"); }catch(e){ log("    écoute impossible : " + e.message, "ko"); }
+          }
+        }
+      }
+      E.innerHTML = '<span class="ok">Connecté. Monte sur la balance pieds nus.</span>';
+    }catch(e){ E.innerHTML = '<span class="ko">' + e.message + '</span>'; log("Erreur : " + e.message, "ko"); }
+  };
+
+  // Balances qui ne font que diffuser (sans connexion) : nécessite l'option expérimentale de Chrome
+  document.getElementById("annonces").onclick = async function(){
+    if (!navigator.bluetooth.requestLEScan){
+      log("Mode diffusion non disponible. Dans Chrome, ouvre chrome://flags, active « Experimental Web Platform features », relance Chrome, puis réessaie.", "ko");
+      E.textContent = "Mode diffusion non disponible sur ce Chrome"; return;
+    }
+    try{
+      await navigator.bluetooth.requestLEScan({acceptAllAdvertisements:true});
+      E.innerHTML = '<span class="ok">Écoute des annonces… monte sur la balance.</span>';
+      navigator.bluetooth.addEventListener("advertisementreceived", function(ev){
+        var n = ev.device.name || ""; if (!n && !ev.manufacturerData.size && !ev.serviceData.size) return;
+        ev.manufacturerData.forEach(function(dv, id){ trame("annonce " + (n || ev.device.id.slice(0, 6)) + " fab " + id.toString(16), dv); });
+        ev.serviceData.forEach(function(dv, u){ trame("annonce " + (n || ev.device.id.slice(0, 6)) + " svc " + String(u).slice(4, 8), dv); });
+      });
+    }catch(e){ log("Erreur annonces : " + e.message, "ko"); }
+  };
+
+  document.getElementById("copier").onclick = function(){
+    var t = lignes.join("\n");
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ E.innerHTML = '<span class="ok">Journal copié. Colle-le dans la conversation.</span>'; },
+      function(){ E.textContent = "Copie impossible : sélectionne le journal à la main."; });
+  };
+})();
+</script>
+</body>
+</html>
