@@ -62,15 +62,6 @@
   <p style="color:var(--gris);font-size:12px;margin:8px 0 0">Formules publiées : masse maigre et eau, Sun et al. 2003 (Am J Clin Nutr) ; muscle squelettique, Janssen et al. 2000 (J Appl Physiol). Valeurs différentes de celles de Fitdays : chaque marque garde ses formules.</p>
 </div>
 
-<div class="carte">
-  <b>Essai sans la balance</b> <span style="color:var(--gris);font-size:13px">(pour voir le calcul tout de suite)</span>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-    <input id="sPoids" type="number" inputmode="decimal" placeholder="Poids (kg)">
-    <input id="sImp" type="number" inputmode="numeric" placeholder="Impédance (ohms, ex. 450)">
-  </div>
-  <button id="simuler" class="second">Calculer</button>
-</div>
-
 <div class="carte"><div id="journal"></div></div>
 
 <script>
@@ -127,12 +118,6 @@
       .map(function(x){ return '<div class="lgn"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'; }).join("");
     document.getElementById("compo").hidden = false;
   }
-  document.getElementById("simuler").onclick = function(){
-    var kg = +String(document.getElementById("sPoids").value).replace(",", "."), R = +document.getElementById("sImp").value;
-    if (!profil()){ E.innerHTML = '<span class="ko">Remplis ton profil (âge et taille).</span>'; return; }
-    var c = compo(kg, R); if (!c){ E.innerHTML = '<span class="ko">Impédance attendue entre 100 et 1500 ohms.</span>'; return; }
-    montreCompo(c); E.innerHTML = '<span class="ok">Calcul fait (essai, sans balance).</span>';
-  };
   // Impédance : sa place dans les trames de cette balance n'est pas encore connue (pesée habillée = pas d'impédance).
   // On cherche, dans les trames de résultat (A3, A7) et les suivantes, un nombre plausible (200 à 1200 ohms) et on l'affiche comme « probable ».
   var dernierKg = 0;
