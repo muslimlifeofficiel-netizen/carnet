@@ -112,15 +112,19 @@
   function compo(kg, R){
     var p = profil(); if (!p || !(R > 100 && R < 1500)) return null;
     var h2r = p.cm * p.cm / R;
-    var ffm = p.f ? -9.529 + 0.168*kg + 0.696*h2r + 0.016*R : -10.678 + 0.262*kg + 0.652*h2r + 0.015*R;
-    var tbw = p.f ? 3.747 + 0.113*kg + 0.45*h2r : 1.203 + 0.176*kg + 0.449*h2r;
+    // Masse maigre : Wu et al. 2015, équation pied-pied 50 kHz, réf. DXA (Nutr J, doi 10.1186/s12937-015-0041-0), homme = 1.
+    var ffm = 13.055 + 0.204*kg + 0.394*h2r - 0.136*p.age + (p.f ? 0 : 8.125);
+    // Eau : Aglago et al. 2013, adultes nord-africains (Eur J Clin Nutr, doi 10.1038/ejcn.2013.125).
+    var tbw = 5.68 + 0.267*h2r + (p.f ? 0 : 4.42) + 0.225*kg - 0.052*p.age;
+    // Muscle squelettique : Janssen et al. 2000. Métabolisme de base : Mifflin-St Jeor 1990.
     var smm = h2r*0.401 + (p.f ? 0 : 3.825) - 0.071*p.age + 5.102;
-    return {poids:kg, gras:(kg-ffm)/kg*100, grasKg:kg-ffm, maigre:ffm, eau:tbw/kg*100, muscle:smm, imc:kg/Math.pow(p.cm/100,2)};
+    var bmr = 10*kg + 6.25*p.cm - 5*p.age + (p.f ? -161 : 5);
+    return {poids:kg, gras:(kg-ffm)/kg*100, grasKg:kg-ffm, maigre:ffm, eau:tbw/kg*100, muscle:smm, bmr:bmr, imc:kg/Math.pow(p.cm/100,2)};
   }
   function montreCompo(c){
     if (!c) return;
     var f = function(v, d){ return v.toFixed(d).replace(".", ","); };
-    document.getElementById("compoListe").innerHTML = [["Poids", f(c.poids,2)+" kg"],["IMC", f(c.imc,1)],["Masse grasse", f(c.gras,1)+" % ("+f(c.grasKg,1)+" kg)"],["Masse maigre", f(c.maigre,1)+" kg"],["Muscle squelettique", f(c.muscle,1)+" kg"],["Eau corporelle", f(c.eau,1)+" %"]]
+    document.getElementById("compoListe").innerHTML = [["Poids", f(c.poids,2)+" kg"],["IMC", f(c.imc,1)],["Masse grasse", f(c.gras,1)+" % ("+f(c.grasKg,1)+" kg)"],["Masse maigre", f(c.maigre,1)+" kg"],["Muscle squelettique", f(c.muscle,1)+" kg"],["Eau corporelle", f(c.eau,1)+" %"],["Métabolisme de base", Math.round(c.bmr)+" kcal"]]
       .map(function(x){ return '<div class="lgn"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'; }).join("");
     document.getElementById("compo").hidden = false;
   }
