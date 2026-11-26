@@ -70,10 +70,19 @@
     }
     return r;
   }
+  function lefu(dv){
+    if (dv.byteLength < 9 || dv.getUint8(2) !== 0) return null;
+    var t = dv.getUint8(3), g;
+    if (t === 0xa2){ g = (dv.getUint8(6) << 16) | (dv.getUint8(7) << 8) | dv.getUint8(8); var st = dv.getUint8(4);
+      return g > 0 ? {kg:g/1000, etat: st === 3 ? "Poids stabilisé" : "Pesée en cours…"} : null; }
+    if (t === 0xa3){ g = (dv.getUint8(5) << 16) | (dv.getUint8(6) << 8) | dv.getUint8(7);
+      return g > 0 ? {kg:g/1000, etat:"Résultat final"} : null; }
+    return null;
+  }
   function trame(nom, dv){
     log(nom + "  [" + dv.byteLength + "]  " + hex(dv));
     var c = candidats(dv);
-    if (c.length) log("    poids possibles : " + c.slice(0, 6).map(function(x){ return x.kg + " kg (octet " + x.o + ", " + x.f + ")"; }).join(" · "), "ok");
+    if (c.length) if (!lefu(dv)) log("    poids possibles : " + c.slice(0, 6).map(function(x){ return x.kg + " kg (octet " + x.o + ", " + x.f + ")"; }).join(" · "), "ok");
   }
   if (!navigator.bluetooth){
     E.innerHTML = '<span class="ko">Ce navigateur ne fait pas de Bluetooth. Ouvre la page dans Chrome sur Android ou sur ordinateur.</span>';
@@ -106,7 +115,11 @@
             (function(ch){
               ch.addEventListener("characteristicvaluechanged", function(ev){
                 var dv = ev.target.value; trame(ch.uuid.slice(4, 8), dv);
-                var c = candidats(dv); if (c.length){ P.textContent = c[0].kg.toFixed(1).replace(".", ",") + " kg"; }
+                // Protocole FFB0 « Lefu / Fitdays » (balance HPS-8007, ICOMON FG2001B-A) :
+                // A2 = poids en direct [seq][07][00][a2][état][..][poids 3 octets en grammes], état 03 = stabilisé ;
+                // A3 = résultat [seq][len][00][a3][..][poids 3 octets en grammes].
+                var lf = lefu(dv);
+                if (lf){ P.textContent = lf.kg.toFixed(2).replace(".", ",") + " kg"; E.innerHTML = '<span class="ok">' + lf.etat + '</span>'; log("    → " + lf.etat + " : " + lf.kg.toFixed(2) + " kg", "ok"); }
               });
             })(c);
             try{ await c.startNotifications(); log("    écoute activée", "ok"); }catch(e){ log("    écoute impossible : " + e.message, "ko"); }
