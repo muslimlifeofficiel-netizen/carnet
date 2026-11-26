@@ -222,11 +222,14 @@
                 if (lf && lf.etat === "Résultat final"){ dernierKg = lf.kg;
                   var imp = (dv.getUint8(9) << 8) | dv.getUint8(10);
                   if (imp > 0){ log("    IMPÉDANCE : " + imp + " ohms", "ok"); montreCompo(compo(lf.kg, imp)); }
-                  else log("    impédance : 0 (pas encore mesurée)", "ko");
+                  else log("    (impédance dans la 2e partie du résultat)");
                 }
                 if (!lf && dernierKg && dv.byteLength >= 6 && dv.getUint8(2) !== 0){
                   var ci = chercheImp(dv).filter(function(x){ return x.o >= 3; });
-                  if (dv.getUint8(2) === 1 && dv.getUint8(1) === 0x12) log("    VALEUR À IDENTIFIER (fin du résultat) : " + ((dv.getUint8(3) << 8) | dv.getUint8(4)) + "  (impédance en ohms, ou masse grasse ×10 ?)", "ok");
+                  // HPS-8007 (FG2001B-A) : l'impédance arrive à la fin du résultat, 2e partie de A3, octets 3 et 4 (ohms).
+                  // Confirmé le 26/11 : 456 ohms, alors que Fitdays affichait 36,7 % de graisse (ce n'est donc pas un pourcentage).
+                  if (dv.getUint8(2) === 1 && dv.getUint8(1) === 0x12){ var R = (dv.getUint8(3) << 8) | dv.getUint8(4);
+                    log("    IMPÉDANCE : " + R + " ohms", "ok"); if (R > 0) montreCompo(compo(dernierKg, R)); }
                   else if (ci.length) log("    (2e partie du résultat, valeurs brutes : " + ci.map(function(x){ return x.v + " à l'octet " + x.o + " " + x.f; }).join(" · ") + ")");
                 }
                 if (lf){ P.textContent = lf.kg.toFixed(2).replace(".", ",") + " kg"; E.innerHTML = '<span class="ok">' + lf.etat + '</span>'; log("    → " + lf.etat + " : " + lf.kg.toFixed(2) + " kg", "ok"); }
