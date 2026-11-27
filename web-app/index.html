@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carnet</title>
+<style>
+:root{--fond:#0B0B0A;--carte:#1A1A18;--trait:#2E2D2A;--texte:#F2EFE8;--gris:#9A968D;--or:#C99A2E}
+body{margin:0;background:var(--fond);color:var(--texte);font:15px -apple-system,Roboto,sans-serif;padding:20px 16px 40px}
+h1{font-size:22px;margin:4px 0 2px} .sous{color:var(--gris);font-size:13px;margin-bottom:16px}
+.carte{background:var(--carte);border:1px solid var(--trait);border-radius:14px;padding:16px;margin-bottom:14px}
+button{width:100%;padding:14px;border:0;border-radius:12px;background:var(--or);color:#0B0B0A;font-weight:700;font-size:15px;margin-top:10px}
+.etat{color:var(--gris);font-size:13px;margin-top:8px;min-height:18px}
+.grand{font-size:40px;font-weight:800;text-align:center;color:var(--or)}
+.lgn{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--trait);font-size:14px}
+input,select{background:#0B0B0A;color:var(--texte);border:1px solid var(--trait);border-radius:8px;padding:8px;width:30%}
+</style></head><body>
+<h1>Carnet de Suivi</h1>
+<div class="sous" id="ver">App Android : test de la montre et de la balance</div>
+
+<div class="carte">
+  <b>Ma montre</b>
+  <button id="bMontre">Connecter ma montre</button>
+  <div class="etat" id="eMontre"></div>
+  <div id="rMontre"></div>
+</div>
+
+<div class="carte">
+  <b>Ma balance</b>
+  <div style="display:flex;gap:6px;margin-top:10px">
+    <select id="pSexe"><option value="h">Frère</option><option value="f">Sœur</option></select>
+    <input id="pAge" type="number" placeholder="Âge"><input id="pTaille" type="number" placeholder="Taille cm">
+  </div>
+  <button id="bBalance">Balance connectée</button>
+  <div class="etat" id="eBalance"></div>
+  <div class="grand" id="poids">—</div>
+  <div id="rBalance"></div>
+</div>
+
+<script src="natif.js"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var info = window.__natifML.info();
+  $("ver").textContent = info ? ("App Android " + info.version + (info.healthConnect ? " · Health Connect OK" : " · Health Connect absent") + (info.bluetooth ? " · Bluetooth OK" : "")) : "Ouvre cette page dans l'app Carnet sur Android.";
+  function f(v, d){ return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString().replace(".", ","); }
+  function lgn(a, b){ return '<div class="lgn"><span>' + a + '</span><b>' + b + '</b></div>'; }
+
+  $("bMontre").onclick = function(){
+    $("eMontre").textContent = "Autorisation Health Connect…";
+    window.__montreML.connecte(7).then(function(d){
+      $("eMontre").textContent = "Données des 7 derniers jours" + (d.sources && d.sources.length ? " (source : " + d.sources.join(", ") + ")" : "");
+      var h = "";
+      (d.jours || []).slice().reverse().forEach(function(j){
+        h += lgn(j.date, (j.pas != null ? j.pas + " pas" : "- pas") + (j.sommeilMin ? " · " + Math.floor(j.sommeilMin/60) + " h " + (j.sommeilMin%60) + " min" : "") + (j.fcMoy ? " · cœur " + j.fcMoy : ""));
+      });
+      if (d.vo2max) h += lgn("VO2 max", f(d.vo2max, 1));
+      if (d.spo2) h += lgn("SpO2", f(d.spo2, 0) + " %");
+      $("rMontre").innerHTML = h;
+    }, function(e){ $("eMontre").textContent = e.message; });
+  };
+
+  ["pSexe","pAge","pTaille"].forEach(function(id){ try{ var v = localStorage.getItem("bal_" + id); if (v) $(id).value = v; }catch(e){} $(id).onchange = function(){ try{ localStorage.setItem("bal_" + id, $(id).value); }catch(e){} }; });
+  $("bBalance").onclick = function(){
+    var p = {femme: $("pSexe").value === "f", age: +$("pAge").value, cm: +$("pTaille").value};
+    $("rBalance").innerHTML = ""; $("poids").textContent = "—";
+    window.__balanceML.connecte(p, function(t){ $("eBalance").textContent = t; }).then(function(r){
+      $("poids").textContent = f(r.kg, 2) + " kg";
+      $("eBalance").textContent = r.ohms ? "Mesure terminée (" + r.ohms + " ohms)" : "Poids seul (pas d'impédance : pieds nus et profil rempli ?)";
+      var c = window.__compoML(r.kg, r.ohms, p);
+      if (c) $("rBalance").innerHTML = lgn("Masse grasse", f(c.gras, 1) + " %") + lgn("Masse maigre", f(c.maigre, 1) + " kg") + lgn("Muscle", f(c.muscle, 1) + " kg") + lgn("Eau", f(c.eau, 1) + " %") + lgn("Métabolisme", Math.round(c.bmr) + " kcal") + lgn("IMC", f(c.imc, 1));
+    }, function(e){ $("eBalance").textContent = e.message; });
+  };
+})();
+</script>
+</body></html>
