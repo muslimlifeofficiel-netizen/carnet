@@ -12,7 +12,21 @@ button{width:100%;padding:14px;border:0;border-radius:12px;background:var(--or);
 .grand{font-size:40px;font-weight:800;text-align:center;color:var(--or)}
 .lgn{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--trait);font-size:14px}
 input,select{background:#0B0B0A;color:var(--texte);border:1px solid var(--trait);border-radius:8px;padding:8px;width:30%}
+.accord{position:fixed;inset:0;background:var(--fond);overflow:auto;padding:28px 18px 40px;z-index:10}
+.accord h2{font-size:22px;margin:0 0 6px}.accord p{color:var(--gris);font-size:14px;margin:0 0 18px}
+.case{display:flex;gap:12px;align-items:flex-start;background:var(--carte);border:1px solid var(--trait);border-radius:12px;padding:14px;margin-bottom:10px;font-size:14px;line-height:1.45}
+.case input{width:22px;height:22px;flex:none;margin-top:1px;accent-color:#C99A2E}.case small{display:block;color:var(--gris);margin-top:4px}
+button:disabled{opacity:.35}.pied{text-align:center;margin-top:28px;font-size:13px}.pied a{color:var(--gris)}
 </style></head><body>
+<div class="accord" id="accord" hidden>
+  <h2>Avant de commencer</h2>
+  <p>Tes données sont à toi. Seul ton coach les voit.</p>
+  <label class="case"><input type="checkbox" id="c18"><span><b>J'ai 18 ans ou plus.</b></span></label>
+  <label class="case"><input type="checkbox" id="cSante"><span><b>J'accepte que le Carnet garde mes données de santé pour mon suivi</b> : poids, mesures de ma balance, données de ma montre, pointages, bilans et photos (frères seulement). Seul mon coach les voit. Je peux retirer cet accord et faire effacer mes données à tout moment.</span></label>
+  <label class="case"><input type="checkbox" id="cIA"><span><b>J'accepte que l'IA prépare mon Résumé ML et lise mon PDF de coaching.</b> Elle ne reçoit ni mon nom, ni mon e-mail, ni mes photos : seulement des chiffres et le texte de mon coaching.<small>Facultatif. Sans cette case, le Carnet marche, sans le Résumé ML.</small></span></label>
+  <button id="bAccord" disabled>Commencer</button>
+  <div class="pied"><a href="confidentialite.html">Lire la page de confidentialité</a></div>
+</div>
 <h1>Carnet de Suivi</h1>
 <div class="sous" id="ver">App Android : test de la montre et de la balance</div>
 
@@ -37,6 +51,20 @@ input,select{background:#0B0B0A;color:var(--texte);border:1px solid var(--trait)
 
 <script src="natif.js"></script>
 <script>
+(function(){
+  // Accord à la première ouverture (gardé sur le téléphone avec sa date ; passera sur le serveur à la migration).
+  var $ = function(id){ return document.getElementById(id); }, A = null;
+  try{ A = JSON.parse(localStorage.getItem("carnet_accord") || "null"); }catch(e){}
+  if (A && A.sante && A.majeur) return;
+  $("accord").hidden = false;
+  function maj(){ $("bAccord").disabled = !($("c18").checked && $("cSante").checked); }
+  $("c18").onchange = maj; $("cSante").onchange = maj;
+  $("bAccord").onclick = function(){
+    var r = {majeur:true, sante:true, ia:$("cIA").checked, date:new Date().toISOString(), version:"2026-11-27"};
+    try{ localStorage.setItem("carnet_accord", JSON.stringify(r)); }catch(e){}
+    $("accord").hidden = true;
+  };
+})();
 (function(){
   var $ = function(id){ return document.getElementById(id); };
   var info = window.__natifML.info();
@@ -71,4 +99,5 @@ input,select{background:#0B0B0A;color:var(--texte);border:1px solid var(--trait)
   };
 })();
 </script>
+<div class="pied"><a href="confidentialite.html">Confidentialité</a></div>
 </body></html>
