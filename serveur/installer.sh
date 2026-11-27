@@ -13,7 +13,7 @@ echo "== 1/7 Mises à jour du système"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get -y -q upgrade
-apt-get -y -q install ufw fail2ban unattended-upgrades unzip curl caddy sqlite3
+apt-get -y -q install ufw fail2ban unattended-upgrades unzip curl caddy sqlite3 git rsync
 
 echo "== 2/7 Clé SSH de Sami (la connexion par mot de passe sera coupée à l'étape suivante, après ton test)"
 install -d -m 700 -o "$UTIL" -g "$UTIL" "/home/$UTIL/.ssh"
@@ -50,7 +50,7 @@ CONF
 
 echo "== 5/7 PocketBase $PB_VERSION (version figée, empreinte vérifiée)"
 id carnet >/dev/null 2>&1 || useradd --system --home /opt/carnet --shell /usr/sbin/nologin carnet
-install -d -m 750 -o carnet -g carnet /opt/carnet /opt/carnet/pb_data /opt/carnet/pb_hooks /opt/carnet/pb_public
+install -d -m 750 -o carnet -g carnet /opt/carnet /opt/carnet/pb_data /opt/carnet/pb_hooks /opt/carnet/pb_public /opt/carnet/pb_migrations
 install -d -m 700 /etc/carnet
 [ -f /etc/carnet/env ] || { touch /etc/carnet/env; chmod 600 /etc/carnet/env; }
 TMP=$(mktemp -d)
@@ -69,7 +69,7 @@ Wants=network-online.target
 User=carnet
 Group=carnet
 EnvironmentFile=/etc/carnet/env
-ExecStart=/opt/carnet/pocketbase serve --http=127.0.0.1:8090 --dir=/opt/carnet/pb_data --hooksDir=/opt/carnet/pb_hooks --publicDir=/opt/carnet/pb_public
+ExecStart=/opt/carnet/pocketbase serve --http=127.0.0.1:8090 --dir=/opt/carnet/pb_data --hooksDir=/opt/carnet/pb_hooks --publicDir=/opt/carnet/pb_public --migrationsDir=/opt/carnet/pb_migrations
 Restart=always
 RestartSec=3
 LimitNOFILE=4096
@@ -110,6 +110,52 @@ $DOMAINE {
 }
 CONF
 systemctl reload caddy || systemctl restart caddy
+
+echo "== Mise à jour automatique du Carnet depuis GitHub (toutes les 5 minutes)"
+cat > /usr/local/sbin/carnet-deploie <<'CONF'
+#!/usr/bin/env bash
+# Récupère le dossier serveur/deploy du dépôt carnet et l'applique s'il a changé.
+set -euo pipefail
+D=/opt/carnet-depot
+if [ -d "$D/.git" ]; then git -C "$D" fetch -q --depth 1 origin main && git -C "$D" reset -q --hard origin/main
+else rm -rf "$D"; git clone -q --depth 1 https://github.com/muslimlifeofficiel-netizen/carnet "$D"; fi
+[ -d "$D/serveur/deploy" ] || exit 0
+CHG=0
+for x in pb_hooks pb_migrations pb_public; do
+  [ -d "$D/serveur/deploy/$x" ] || continue
+  OUT=$(rsync -a --delete --itemize-changes --chown=carnet:carnet "$D/serveur/deploy/$x/" "/opt/carnet/$x/")
+  [ -n "$OUT" ] && CHG=1
+done
+[ "$CHG" = 1 ] && systemctl restart carnet && logger -t carnet-deploie "Carnet mis à jour ($(git -C "$D" rev-parse --short HEAD))"
+exit 0
+CONF
+chmod 750 /usr/local/sbin/carnet-deploie
+cat > /etc/systemd/system/carnet-deploie.service <<CONF
+[Unit]
+Description=Mise à jour du Carnet depuis GitHub
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/carnet-deploie
+CONF
+cat > /etc/systemd/system/carnet-deploie.timer <<CONF
+[Unit]
+Description=Mise à jour du Carnet toutes les 5 minutes
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+CONF
+systemctl daemon-reload
+systemctl enable --now carnet-deploie.timer
+
+echo "== Compte administrateur (toi seul)"
+if [ ! -f /etc/carnet/.admin ]; then
+  read -r -p "Ton e-mail d'administrateur : " AMAIL
+  read -r -s -p "Choisis un mot de passe administrateur (long, rangé dans Bitwarden) : " APASS; echo
+  sudo -u carnet /opt/carnet/pocketbase superuser upsert "$AMAIL" "$APASS" --dir=/opt/carnet/pb_data
+  unset APASS; touch /etc/carnet/.admin; systemctl restart carnet
+fi
 
 echo "== 7/7 Contrôle"
 sleep 2
