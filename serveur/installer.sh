@@ -13,7 +13,7 @@ echo "== 1/7 Mises à jour du système"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get -y -q upgrade
-apt-get -y -q install ufw fail2ban unattended-upgrades unzip curl caddy sqlite3 git rsync
+apt-get -y -q install ufw fail2ban unattended-upgrades unzip curl caddy sqlite3 git rsync poppler-utils
 
 echo "== 2/7 Clé SSH de Sami (la connexion par mot de passe sera coupée à l'étape suivante, après ton test)"
 install -d -m 700 -o "$UTIL" -g "$UTIL" "/home/$UTIL/.ssh"
